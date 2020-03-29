@@ -9,229 +9,485 @@
 %{
   #include <stdlib.h>
   #include <stdbool.h>
+  #include <string.h>
 
-  bool lex_verbose_flag = false;
-  bool are_syntax_error = false;
-  
-  bool valid_line = true;
-  int col_eof = 1, line_eof = 1;
   int line = 1;
   int column = 1;
+
   int comment_line = 1;
   int comment_column = 1;
+
   int string_line = 1;
   int string_column = 1;
-  int error_column = 1;
-
-  char* string = NULL;
-  int semicolon = 1;
   
-  void print(char* str){
-    if(lex_verbose_flag){
-      printf("%s", str);
-    }
-  }
+  int buffer_size;
+  int string_size;
+  char *string;
 
-  void print_intlit(char* type, char* str) {
-    if(lex_verbose_flag) {
-      printf("%s(%s)\n", type, str);
-    }
-  }
+  bool print_tokens = false;
+  bool just_lexical = false;
+  bool string_error = false;
 
-  void print_strlit(char* type, char* str) {
-    if(lex_verbose_flag) {
-      printf("%s(\"%s\")\n", type, str);
-    }
-  }
+  bool string_to_bool(char *string);
+  void yyerror(const char *s);
+  char* make_string(char *s);
 %}
 
   /* Definitions */
-int           [0-9]+
-char          [^(\r\n\")]
-letter        [a-z]|[A-Z]|\$|_
-int_lit       ([1-9]+({int}|_)*{int})|{int}
-exponent      (e|E)(\+|\-)?(({int}_*)|{int_lit})*
-
-EXCEPTIONS        ([^\""\\"\n\r])
-ACCEPTESCAPES     (\\(f|n|r|t|\"))
-STRLIT            ({EXCEPTIONS}|{ACCEPTESCAPES}|"\\\\"|"("|")")*
+line_end      \r\n|\n|\r
+id            [a-zA-Z_$][a-zA-Z_$0-9]*
+int_lit       0|[1-9]+("_"*[0-9]+)*
+digits        [0-9]+("_"*[0-9]+)*
+exponent      [eE][+-]?{digits}
+real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{exponent}
 
 %X MULTILINE_COMMENT
 %X INLINE_COMMENT
-%X ERRORS
 %X IN_STRING
-%X ERROR_STRING
 
 %%
   /* Rules */
 
 "/*" {
   BEGIN(MULTILINE_COMMENT);
+  comment_line = line;
+  comment_column = column;
+  column += yyleng;
+}
+
+<MULTILINE_COMMENT>. {
+  column += yyleng;
+}
+
+<MULTILINE_COMMENT>{line_end} {
+  line++;
+  column = 1;
+}
+
+<MULTILINE_COMMENT><<EOF>> {
+  printf("Line %d, col %d: unterminated comment\n", comment_line, comment_column);
+  yyterminate();
 }
 
 <MULTILINE_COMMENT>"*/" {
   BEGIN(0);
-}
-
-<MULTILINE_COMMENT>\n {
-
-}
-
-<MULTILINE_COMMENT>. {
-  
+  column += yyleng;
 }
 
 "//" {
   BEGIN(INLINE_COMMENT);
+  column += yyleng;
 }
 
-<INLINE_COMMENT>\n {
+<INLINE_COMMENT>{line_end} {
   BEGIN(0);
+  line++;
+  column = 1;
 }
 
 <INLINE_COMMENT>. {
-
+  column += yyleng;
 }
 
 \" {
-  if(string == NULL) {
-    string = (char*) malloc(sizeof(char));
-  }
-  string[0] = '\0';
   BEGIN(IN_STRING);
-}
-
-<IN_STRING>\\[^fnrt\\\n\"] {
-  printf("invalid escape sequence (%s)\n", yytext);
-  BEGIN(ERROR_STRING);
-}
-
-<IN_STRING>{STRLIT} {
-  string = (char*) malloc(yyleng*sizeof(char));
-  strcpy(string, yytext);
+  string = malloc(10 * sizeof(char));
+  buffer_size = 10;
+  string[0] = '\0';
+  string_size = 0;
+  string_error = false;
+  string_line = line;
+  string_column = column;
+  column += yyleng;
 }
 
 <IN_STRING>\" {
-  print_strlit("STRLIT", string);
   BEGIN(0);
+  column += yyleng;
+  yytext = make_string(string);
+  yyleng = strlen(yytext);
+  if(print_tokens && !string_error) {
+    printf("STRLIT(%s)\n", yytext);
+  }
+  free(string);
 }
 
-<IN_STRING>\n {
-  printf("unterminated string literal\n");
-  BEGIN(0);
-}
-
-<IN_STRING>\\ {
-  printf("invalid escape sequence (%s)\n", yytext);
-  BEGIN(ERROR_STRING);
+<IN_STRING>\\[fnrt\\\"] {
+  char *token = yytext;
+  string_size += 2;
+  if(string_size >= buffer_size - 1) {
+    string = realloc(string, (buffer_size + 10) * sizeof(char));
+    buffer_size += 10;
+  }
+  strcat(string, token);
+  column += yyleng;
 }
 
 <IN_STRING><<EOF>> {
-  printf("unterminated string literal\n");
-  return 0;
+  printf("Line %d, col %d: unterminated string literal\n", string_line, string_column);
+  free(string);
+  yyterminate();
+}
+
+<IN_STRING>{line_end} {
+  printf("Line %d, col %d: unterminated string literal\n", string_line, string_column);
+  BEGIN(0);
+  free(string);
+  line++;
+  column = 1;
+}
+
+<IN_STRING>\\[^\n\r]? {
+  printf("Line %d, col %d: invalid escape sequence (%s)\n", line, column, yytext);
+  string_error = true;
+  column += yyleng;
 }
 
 <IN_STRING>. {
-
+  char* token = yytext;
+  string_size++;
+  if(string_size >= buffer_size - 1) {
+    string = realloc(string, (buffer_size + 10) * sizeof(char));
+    buffer_size += 10;
+  } 
+  strcat(string, token);
+  column += yyleng;
 }
 
-<ERROR_STRING>\\[^fnrt\\\n\"] {
-  printf("invalid escape sequence (%s)\n", yytext);
-  BEGIN(0);
+";" {
+  if(print_tokens)
+    printf("SEMICOLON\n");
+  column += yyleng;
 }
 
-<ERROR_STRING>{STRLIT} {
-
+"," {
+  if(print_tokens)
+    printf("COMMA\n");
+  column += yyleng;
 }
 
-<ERROR_STRING>\" {
-  BEGIN(0);
+">" {
+  if(print_tokens)
+    printf("GT\n");
+  column += yyleng;
 }
 
-<ERROR_STRING>\n {
-  printf("unterminated string literal\n");
-  BEGIN(0);
+"%" {
+  if(print_tokens)
+    printf("MOD\n");
+  column += yyleng;
 }
 
-<ERROR_STRING>\\ {
-  printf("invalid escape sequence (%s)\n", yytext);
-  BEGIN(0);
+"!" {
+  if(print_tokens)
+    printf("NOT\n");
+  column += yyleng;
 }
 
-<ERROR_STRING><<EOF>> {
-  printf("unterminated string literal\n");
-  return 0;
+"&""&" {
+  if(print_tokens)
+    printf("AND\n");
+  column += yyleng;
 }
 
-<ERROR_STRING>. {
-
+"=" {
+  if(print_tokens)
+    printf("ASSIGN\n");
+  column += yyleng;
 }
 
-";"                                                                                        { print("SEMICOLON\n"); }
-","                                                                                        { print("COMMA\n");     }
-">"                                                                                        { print("GT\n");        }
-"%"                                                                                        { print("MOD\n");       }
-"!"                                                                                        { print("NOT\n");       }
-"&""&"                                                                                       { print("AND\n");       }
-"="                                                                                       { print("ASSIGN\n");    }
-"*"                                                                                       { print("STAR\n");      }
-"/"                                                                                       { print("DIV\n");       }
-"{"                                                                                       { print("LBRACE\n");    }
-"}"                                                                                       { print("RBRACE\n");    }
-"("                                                                                       { print("LPAR\n");      }
-")"                                                                                       { print("RPAR\n");      }
-"["                                                                                       { print("LSQ\n");       }
-"]"                                                                                       { print("RSQ\n");       }
-"<"                                                                                       { print("LT\n");        }
-"-"                                                                                       { print("MINUS\n");     }
-"+"                                                                                       { print("PLUS\n");      }
-"!""="                                                                                       { print("NE\n");        }
-"-"">"                                                                                       { print("ARROW\n");     }
-"^"                                                                                       { print("XOR\n");       }
-if                                                                                       { print("IF\n");        }
-int                                                                                      { print("INT\n");       }
-">""="                                                                                      { print("GE\n");        }
-"=""="                                                                                     { print("EQ\n");        }
-"<""="                                                                                     { print("LE\n");        }
-"|""|"                                                                                     { print("OR\n");        }
-"<""<"                                                                                     { print("LSHIFT\n");    }
-">"">"                                                                                     { print("RSHIFT\n");    }
-else                                                                                     { print("ELSE\n");      }
-void                                                                                     { print("VOID\n");      }
-class                                                                                    { print("CLASS\n");     }
-while                                                                                    { print("WHILE\n");     }
-public                                                                                   { print("PUBLIC\n");    }
-double                                                                                   { print("DOUBLE\n");    }
-static                                                                                   { print("STATIC\n");    }
-return                                                                                   { print("RETURN\n");    }
-String                                                                                   { print("STRING\n");    }
-boolean                                                                                  { print("BOOL\n");      }
-"."length                                                                                 { print("DOTLENGTH\n"); }
-true|false                                                                               { print_intlit("BOOLIT", yytext);    }
-Integer"."parseInt                                                                        { print("PARSEINT\n");  }
-System"."out"."print                                                                       { print("PRINT\n");     }
-"\+\+"|"\-\-"|null|Integer|System|abstract|continue|for|new|switch|assert|default|package|synchronized|do|goto|private|this|break|implements|protected|throw|byte|import|throws|case|enum|instanceof|transient|catch|extends|short|try|char|final|interface|finally|long|strictfp|volatile|const|float|native|super                                                        { print_intlit("RESERVED", yytext);  }
+"*" {
+  if(print_tokens)
+    printf("STAR\n");
+  column += yyleng;
+}
 
-{int_lit}                                                                                { print_intlit("INTLIT", yytext);    }
-({int_lit}(\.({int_lit}{exponent}?)?|{exponent}))|({int_lit}?\.0*(0(_)*{int_lit})*{int_lit}?{exponent}?)    { print_intlit("REALLIT", yytext);   }
-{letter}+({letter}|{int})*                                                               { print_intlit("ID", yytext);        }
+"/" {
+  if(print_tokens)
+    printf("DIV\n");
+  column += yyleng;
+}
 
-" "|\t|\n|                                                                 {                        }
+"{" {
+  if(print_tokens)
+    printf("LBRACE\n");
+  column += yyleng;
+}
+
+"}" {
+  if(print_tokens)
+    printf("RBRACE\n");
+  column += yyleng;
+}
+
+"(" {
+  if(print_tokens)
+    printf("LPAR\n");
+  column += yyleng;
+}
+
+")" {
+  if(print_tokens)
+    printf("RPAR\n");
+  column += yyleng;
+}
+
+"[" {
+  if(print_tokens)
+    printf("LSQ\n");
+  column += yyleng;
+}
+
+"]" {
+  if(print_tokens)
+    printf("RSQ\n");
+  column += yyleng;
+}
+
+"<" {
+  if(print_tokens)
+    printf("LT\n");
+  column += yyleng;
+}
+
+"-" {
+  if(print_tokens)
+    printf("MINUS\n");
+  column += yyleng;
+}
+
+"+" {
+  if(print_tokens)
+    printf("PLUS\n");
+  column += yyleng;
+}
+
+"!""=" {
+  if(print_tokens)
+    printf("NE\n");
+  column += yyleng;
+}
+
+"-"">" {
+  if(print_tokens)
+    printf("ARROW\n");
+  column += yyleng;
+}
+
+"^" {
+  if(print_tokens)
+    printf("XOR\n");
+  column += yyleng;
+}
+
+if {
+  if(print_tokens)
+    printf("IF\n");
+  column += yyleng;
+}
+
+int {
+  if(print_tokens)
+    printf("INT\n");
+  column += yyleng;
+}
+
+">""=" {
+  if(print_tokens)
+    printf("GE\n");
+  column += yyleng;
+}
+
+"=""=" {
+  if(print_tokens)
+    printf("EQ\n");
+  column += yyleng;
+}
+
+"<""=" {
+  if(print_tokens)
+    printf("LE\n");
+  column += yyleng;
+}
+
+"|""|" {
+  if(print_tokens)
+    printf("OR\n");
+  column += yyleng;
+}
+
+"<""<" {
+  if(print_tokens)
+    printf("LSHIFT\n");
+  column += yyleng;
+}
+">"">" {
+  if(print_tokens)
+    printf("RSHIFT\n");
+  column += yyleng;
+}
+
+else {
+  if(print_tokens)
+    printf("ELSE\n");
+  column += yyleng;
+}
+
+void {
+  if(print_tokens)
+    printf("VOID\n");
+  column += yyleng;
+}
+
+class {
+  if(print_tokens)
+    printf("CLASS\n");
+  column += yyleng;
+}
+
+while {
+  if(print_tokens)
+    printf("WHILE\n");
+  column += yyleng;
+}
+
+public {
+  if(print_tokens)
+    printf("PUBLIC\n");
+  column += yyleng;
+}
+
+double {
+  if(print_tokens)
+    printf("DOUBLE\n");
+  column += yyleng;
+}
+
+static {
+  if(print_tokens)
+    printf("STATIC\n");
+  column += yyleng;
+}
+
+return {
+  if(print_tokens)
+    printf("RETURN\n");
+  column += yyleng;
+}
+
+String {
+  if(print_tokens)
+    printf("STRING\n");
+  column += yyleng;
+}
+
+boolean {
+  if(print_tokens)
+    printf("BOOL\n");
+  column += yyleng;
+}
+
+"."length {
+  if(print_tokens)
+    printf("DOTLENGTH\n");
+  column += yyleng;
+}
+
+true|false {
+  if(print_tokens)
+    printf("BOOLLIT(%s)\n", yytext);
+  column += yyleng;
+}
+
+Integer"."parseInt {
+  if(print_tokens)
+    printf("PARSEINT\n");
+  column += yyleng;
+}
+
+System"."out"."print {
+  if(print_tokens)
+    printf("PRINT\n");
+  column += yyleng;
+}
+
+"\+\+"|"\-\-"|null|Integer|System|abstract|continue|for|new|switch|assert|default|package|synchronized|do|goto|private|this|break|implements|protected|throw|byte|import|throws|case|enum|instanceof|transient|catch|extends|short|try|char|final|interface|finally|long|strictfp|volatile|const|float|native|super {
+  if(print_tokens)
+    printf("RESERVED(%s)\n", yytext);
+  column += yyleng;
+}
+
+{int_lit} {
+  if(print_tokens)
+    printf("INTLIT(%s)\n", yytext);
+  column += yyleng;
+}
+
+{real_lit} {
+  if(print_tokens)
+    printf("REALLIT(%s)\n", yytext);
+  column += yyleng;
+}
+
+{id} {
+  if(print_tokens)
+    printf("ID(%s)\n", yytext);
+  column += yyleng;
+}
+
+{line_end} {
+  line++;
+  column = 1;
+}
+
+" "|\t|\f {
+  column += yyleng;
+}
 
 . {
-  printf("illegal character (%s)\n", yytext);
+  printf("Line %d, col %d: illegal character (%s)\n", line, column, yytext);
+  column += yyleng;
 }
 
 %%
   /* Subroutines */
+
 int main(int argc, char **argv) {
-  if(argc == 1) {
-    
-  } else if(strcmp(argv[1], "-l") == 0) {
-    lex_verbose_flag = true;
+  if(argc == 2) {
+    if(strcmp(argv[1], "-l") == 0) {
+      print_tokens = true;
+      just_lexical = true;
+      yylex();
+    } else if(strcmp(argv[1], "-e1") == 0) {
+      print_tokens = false;
+      just_lexical = true;
+      yylex();
+    }
   }
-  yylex();
+
+  yylex_destroy();
   return 0;
+}
+
+bool string_to_bool(char *string) {
+  if(strcmp(string, "true") == 0) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+char* make_string(char *s) {
+  char *str = malloc(strlen(s) + 3);
+  if(str == NULL) {
+    return NULL;
+  }
+
+  str[0] = '"';
+  str[1] = '\0';
+  strcat(str, s);
+  strcat(str, "\"");
+  return str;
 }
 
 int yywrap() {
