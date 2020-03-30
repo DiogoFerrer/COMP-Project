@@ -2,3 +2,6 @@ lex.yy.c
 Factorial.class
 jucompiler.zip
 out.txt
+y.tab.*
+todo.txt
+jucompiler
