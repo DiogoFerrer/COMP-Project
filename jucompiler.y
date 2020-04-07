@@ -33,7 +33,7 @@
 %token <string> PRINT DOTLENGTH PARSEINT RETURN;
 %token INT BOOL DOUBLE STRING VOID;
 %token ELSE IF;
-%token <string> PLUS MINUS STARF DIV MOD RSHIFT LSHIFT;
+%token <string> PLUS MINUS STAR DIV MOD RSHIFT LSHIFT;
 %token GE LE NE EQ LT GT;
 %token <string> OR AND NOT XOR;
 %token LSQ RSQ;
@@ -139,7 +139,8 @@ varDeclRec:
     | COMMA id varDeclRec   { $$ = new_node("VarDeclRec", NULL); add_child($$, $2); add_child($$, $3); }           
     ;
 
-typeRule: BOOL  { $$ = new_node("Bool", NULL); }
+typeRule: 
+    BOOL        { $$ = new_node("Bool", NULL); }
     | INT       { $$ = new_node("Int", NULL); }        
     | DOUBLE    { $$ = new_node("Double", NULL); }                               
     ;

@@ -320,6 +320,8 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("XOR\n");
   column += yyleng;
+  if(!just_lexical)
+    return XOR;
 }
 
 if {
@@ -374,11 +376,16 @@ int {
   if(print_tokens)
     printf("LSHIFT\n");
   column += yyleng;
+  if(!just_lexical)
+    return LSHIFT;
 }
+
 ">"">" {
   if(print_tokens)
     printf("RSHIFT\n");
   column += yyleng;
+  if(!just_lexical)
+    return RSHIFT;
 }
 
 else {
@@ -473,6 +480,7 @@ true|false {
   if(print_tokens)
     printf("BOOLLIT(%s)\n", yytext);
   column += yyleng;
+  yylval.string = (char*) strdup(yytext);
   if(!just_lexical)
     return BOOLLIT;
 }
@@ -546,11 +554,11 @@ System"."out"."print {
 %%
   /* Subroutines */
 
-void yyerror (char *s) {
+void yyerror (char *str) {
     if(!strcmp(yytext, "")) {
         yyleng = 0;
     }
-    printf ("Line %d, col %d: %s: %s\n", line, column - yyleng, s, yytext);
+    printf ("Line %d, col %d: %s: %s\n", line, column - yyleng, str, yytext);
 }
 
 char* build_str(char *s) {

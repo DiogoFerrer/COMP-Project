@@ -62,7 +62,7 @@ void program_tree(Tree_Node *program, Tree_Node *second_node) {
         second_node->children[2] = NULL;
     }
 
-    if(!strcmp(second_node->key,"ProgramRec")) {
+    if(!strcmp(second_node->key, "ProgramRec")) {
         int i;
         for(i = 0; i < second_node->children_count; i++) {
             program_tree(program, second_node->children[i]);
@@ -89,7 +89,9 @@ void method_body_tree(Tree_Node *method_body, Tree_Node *second_node) {
     }
 
     if(strcmp(second_node->key, "MethodBodyRec")) {
-        add_child(method_body, second_node);
+        if(strcmp(second_node->key, "Error")) {
+            add_child(method_body, second_node);
+        }
 
         if(!strcmp(second_node->key, "VarDecl")) {
             var_decl_tree(method_body, second_node->children[2], second_node->children[0]->key);
