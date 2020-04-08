@@ -196,6 +196,9 @@ statement:
                                                             if(count == 1) {
                                                                 free($$);
                                                                 $$ = $$->children[0];
+                                                            } else if(count == 0) {
+                                                                free($$);
+                                                                $$ = NULL;
                                                             }
                                                           }
     | error SEMICOLON                                     { $$ = new_node("Error", NULL); tree_flag = false; }
