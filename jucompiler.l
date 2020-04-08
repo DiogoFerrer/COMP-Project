@@ -55,13 +55,13 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   column += yyleng;
 }
 
-<MULTILINE_COMMENT>. {
-  column += yyleng;
-}
-
 <MULTILINE_COMMENT>{line_end} {
   line++;
   column = 1;
+}
+
+<MULTILINE_COMMENT>. {
+  column += yyleng;
 }
 
 <MULTILINE_COMMENT><<EOF>> {
