@@ -183,11 +183,20 @@ statement:
                                                                 add_child($$, $5);
                                                             add_child($$, new_node("Block", NULL));
                                                           }
-    | LBRACE statementRec RBRACE                          { 
+    | LBRACE statementRec RBRACE                          {
                                                             $$ = new_node("Block", NULL);
                                                             statement_tree($$, $2);
-                                                            if($$->children_count == 1)
+                                                            int count = 0;
+                                                            int k;
+                                                            for(k = 0; k < $$->children_count; k++) {
+                                                                if($$->children[k] != NULL) {
+                                                                    count++;
+                                                                }
+                                                            }
+                                                            if(count == 1) {
+                                                                free($$);
                                                                 $$ = $$->children[0];
+                                                            }
                                                           }
     | error SEMICOLON                                     { $$ = new_node("Error", NULL); tree_flag = false; }
     ;
