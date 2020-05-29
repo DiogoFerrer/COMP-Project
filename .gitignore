@@ -5,3 +5,4 @@ out.txt
 y.tab.*
 todo.txt
 jucompiler
+*.DS*

@@ -10,16 +10,17 @@
   #include <stdlib.h>
   #include <stdbool.h>
   #include <string.h>
+  #include "ast_tree.h"
   #include "y.tab.h"
 
   int line = 1;
   int column = 1;
 
-  int comment_line = 1;
-  int comment_column = 1;
+  int comment_line;
+  int comment_column;
 
-  int string_line = 1;
-  int string_column = 1;
+  int string_line;
+  int string_column;
   
   int buffer_size;
   int string_size;
@@ -28,6 +29,8 @@
   bool print_tokens = false;
   bool just_lexical = false;
   bool string_error = false;
+
+  extern bool error;
 
   void yyerror(char *s);
   char* build_str(char *s);
@@ -65,6 +68,7 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
 }
 
 <MULTILINE_COMMENT><<EOF>> {
+  error = true;
   printf("Line %d, col %d: unterminated comment\n", comment_line, comment_column);
   yyterminate();
 }
@@ -109,7 +113,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens && !string_error) {
     printf("STRLIT(%s)\n", yytext);
   }
-  yylval.string = (char*) strdup(yytext);
+  yylval.token.str = (char*) strdup(yytext);
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
   free(string);
   if(!just_lexical && !string_error) {
     return STRLIT;
@@ -128,12 +134,14 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
 }
 
 <IN_STRING><<EOF>> {
+  error = true;
   printf("Line %d, col %d: unterminated string literal\n", string_line, string_column);
-  free(string);
   yyterminate();
+  free(string);
 }
 
 <IN_STRING>{line_end} {
+  error = true;
   printf("Line %d, col %d: unterminated string literal\n", string_line, string_column);
   BEGIN(0);
   free(string);
@@ -142,6 +150,7 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
 }
 
 <IN_STRING>\\[^\n\r]? {
+  error = true;
   printf("Line %d, col %d: invalid escape sequence (%s)\n", line, column, yytext);
   string_error = true;
   column += yyleng;
@@ -162,6 +171,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("SEMICOLON\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return SEMICOLON;
 }
@@ -170,6 +182,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("COMMA\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return COMMA;
 }
@@ -178,6 +193,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("GT\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return GT;
 }
@@ -186,6 +204,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("MOD\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return MOD;
 }
@@ -194,6 +215,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("NOT\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return NOT;
 }
@@ -202,6 +226,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("AND\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return AND;
 }
@@ -210,6 +237,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("ASSIGN\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return ASSIGN;
 }
@@ -218,6 +248,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("STAR\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return STAR;
 }
@@ -226,6 +259,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("DIV\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return DIV;
 }
@@ -234,6 +270,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("LBRACE\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return LBRACE;
 }
@@ -242,6 +281,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("RBRACE\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return RBRACE;
 }
@@ -250,6 +292,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("LPAR\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return LPAR;
 }
@@ -258,6 +303,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("RPAR\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return RPAR;
 }
@@ -266,6 +314,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("LSQ\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return LSQ;
 }
@@ -274,6 +325,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("RSQ\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return RSQ;
 }
@@ -282,6 +336,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("LT\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return LT;
 }
@@ -290,6 +347,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("MINUS\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return MINUS;
 }
@@ -298,6 +358,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("PLUS\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return PLUS;
 }
@@ -306,6 +369,9 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("NE\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return NE;
 }
@@ -314,12 +380,18 @@ real_lit      {digits}"."{digits}?{exponent}?|"."{digits}{exponent}?|{digits}{ex
   if(print_tokens)
     printf("ARROW\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
 }
 
 "^" {
   if(print_tokens)
     printf("XOR\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return XOR;
 }
@@ -328,6 +400,9 @@ if {
   if(print_tokens)
     printf("IF\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return IF;
 }
@@ -336,6 +411,9 @@ int {
   if(print_tokens)
     printf("INT\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return INT;
 }
@@ -344,6 +422,9 @@ int {
   if(print_tokens)
     printf("GE\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return GE;
 }
@@ -352,6 +433,9 @@ int {
   if(print_tokens)
     printf("EQ\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return EQ;
 }
@@ -360,6 +444,9 @@ int {
   if(print_tokens)
     printf("LE\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return LE;
 }
@@ -368,6 +455,9 @@ int {
   if(print_tokens)
     printf("OR\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return OR;
 }
@@ -376,6 +466,9 @@ int {
   if(print_tokens)
     printf("LSHIFT\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return LSHIFT;
 }
@@ -384,6 +477,9 @@ int {
   if(print_tokens)
     printf("RSHIFT\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return RSHIFT;
 }
@@ -392,6 +488,9 @@ else {
   if(print_tokens)
     printf("ELSE\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return ELSE;
 }
@@ -400,6 +499,9 @@ void {
   if(print_tokens)
     printf("VOID\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return VOID;
 }
@@ -408,6 +510,9 @@ class {
   if(print_tokens)
     printf("CLASS\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return CLASS;
 }
@@ -416,6 +521,9 @@ while {
   if(print_tokens)
     printf("WHILE\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return WHILE;
 }
@@ -424,6 +532,9 @@ public {
   if(print_tokens)
     printf("PUBLIC\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return PUBLIC;
 }
@@ -432,6 +543,9 @@ double {
   if(print_tokens)
     printf("DOUBLE\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return DOUBLE;
 }
@@ -440,6 +554,9 @@ static {
   if(print_tokens)
     printf("STATIC\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return STATIC;
 }
@@ -448,6 +565,9 @@ return {
   if(print_tokens)
     printf("RETURN\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return RETURN;
 }
@@ -456,6 +576,9 @@ String {
   if(print_tokens)
     printf("STRING\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return STRING;
 }
@@ -464,6 +587,9 @@ boolean {
   if(print_tokens)
     printf("BOOL\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return BOOL;
 }
@@ -472,6 +598,9 @@ boolean {
   if(print_tokens)
     printf("DOTLENGTH\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return DOTLENGTH;
 }
@@ -480,7 +609,9 @@ true|false {
   if(print_tokens)
     printf("BOOLLIT(%s)\n", yytext);
   column += yyleng;
-  yylval.string = (char*) strdup(yytext);
+  yylval.token.str = (char*) strdup(yytext);
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
   if(!just_lexical)
     return BOOLLIT;
 }
@@ -489,6 +620,9 @@ Integer"."parseInt {
   if(print_tokens)
     printf("PARSEINT\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return PARSEINT;
 }
@@ -497,6 +631,9 @@ System"."out"."print {
   if(print_tokens)
     printf("PRINT\n");
   column += yyleng;
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
+  yylval.token.str = NULL;
   if(!just_lexical)
     return PRINT;
 }
@@ -505,7 +642,9 @@ System"."out"."print {
   if(print_tokens)
     printf("RESERVED(%s)\n", yytext);
   column += yyleng;
-  yylval.string = (char*) strdup(yytext);
+  yylval.token.str = (char*) strdup(yytext);
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
   if(!just_lexical)
     return RESERVED;
 }
@@ -514,7 +653,9 @@ System"."out"."print {
   if(print_tokens)
     printf("INTLIT(%s)\n", yytext);
   column += yyleng;
-  yylval.string = (char*) strdup(yytext);
+  yylval.token.str = (char*) strdup(yytext);
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
   if(!just_lexical)
     return INTLIT;
 }
@@ -523,7 +664,9 @@ System"."out"."print {
   if(print_tokens)
     printf("REALLIT(%s)\n", yytext);
   column += yyleng;
-  yylval.string = (char*) strdup(yytext);
+  yylval.token.str = (char*) strdup(yytext);
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
   if(!just_lexical)
     return REALLIT;
 }
@@ -532,7 +675,9 @@ System"."out"."print {
   if(print_tokens)
     printf("ID(%s)\n", yytext);
   column += yyleng;
-  yylval.string = (char*) strdup(yytext);
+  yylval.token.str = (char*) strdup(yytext);
+  yylval.token.line = line;
+  yylval.token.column = column - yyleng;
   if(!just_lexical)
     return ID;
 }
@@ -547,6 +692,7 @@ System"."out"."print {
 }
 
 . {
+  error = true;
   printf("Line %d, col %d: illegal character (%s)\n", line, column, yytext);
   column += yyleng;
 }
@@ -558,6 +704,8 @@ void yyerror (char *str) {
     if(!strcmp(yytext, "")) {
         yyleng = 0;
     }
+
+    error = true;
     printf ("Line %d, col %d: %s: %s\n", line, column - yyleng, str, yytext);
 }
 
