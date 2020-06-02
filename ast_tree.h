@@ -171,16 +171,24 @@ char *bool_semantics(Tree_Node *bool_node, Method_env *env);
 bool arithmetic_semantics(char *first, char *second);
 bool cmp_semantics(char *first, char *second);
 
+#define GLOBAL "global."
+#define LOCAL "local."
+#define FUNC "func."
+#define STR "str."
+#define ARGS "args."
+#define LABEL "label."
+
 void gen_code(Tree_Node *root, Class_env *env);
 void variable_allocation(Table_node *node, bool global);
 void gen_class_variables(Tree_Node *root, Class_env *env);
-void llvm_type(char *type);
+char *llvm_type(char *type);
 void gen_method(Tree_Node *node);
 void gen_print(Tree_Node *node);
+Method_gen_type get_gen_function(char *name);
 void skip(Tree_Node *node);
 void gen_dec_lit(Tree_Node *node);
 void gen_real_lit(Tree_Node *node);
-int print_llvm_str(char *str, int k);
+int print_llvm_str(char *str, bool flag);
 void find_static_str(Tree_Node *root);
 
 #endif

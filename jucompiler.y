@@ -339,6 +339,8 @@ int main(int argc, char **argv) {
 
         if(!error) {
             env = semantics(root, env);
+        }
+        if(!error) {
             gen_code(root, env);
         }
     }
